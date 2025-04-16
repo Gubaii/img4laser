@@ -1,0 +1,512 @@
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    background-color: #f4f4f4;
+    line-height: 1.6;
+}
+
+.container {
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    width: 90%;
+    max-width: 1200px;
+}
+
+.controls, .results {
+    margin-bottom: 20px;
+}
+
+.control-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 10px;
+    gap: 10px;
+}
+
+label, select, button, input[type="file"], input[type="range"] {
+    margin: 5px 0;
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+}
+
+select {
+    background-color: white;
+    cursor: pointer;
+    min-width: 150px;
+}
+
+.material-select, .color-variant-select {
+    padding: 8px;
+    font-size: 1em;
+}
+
+button {
+    background-color: #007bff;
+    color: white;
+    cursor: pointer;
+    border: none;
+    transition: background-color 0.3s ease;
+    min-width: 120px;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+button.secondary {
+    background-color: #6c757d;
+}
+
+button.secondary:hover {
+    background-color: #5a6268;
+}
+
+/* 自动优化按钮 */
+#optimizeAnchorButton {
+    background-color: #28a745;
+    margin-right: 5px;
+}
+
+#optimizeAnchorButton:hover {
+    background-color: #218838;
+}
+
+/* 修复锚点灰度值显示抖动问题 */
+#anchorGray-value {
+    display: inline-block;
+    min-width: 30px;
+    text-align: right;
+}
+
+/* 优化锚点灰度控制部分的布局 */
+.param-item {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+}
+
+.param-item label {
+    display: flex;
+    align-items: center;
+    min-width: 200px;
+    flex-shrink: 0;
+}
+
+.param-item label span {
+    margin-left: 5px;
+}
+
+.param-item input[type="range"] {
+    flex: 1;
+    min-width: 150px;
+    margin: 0 10px;
+}
+
+button.small {
+    min-width: auto;
+    padding: 5px 10px;
+    font-size: 0.9em;
+}
+
+input[type="file"] {
+    border: none;
+    background: #eee;
+    width: 100%;
+    max-width: 300px;
+}
+
+input[type="range"] {
+    border: none;
+}
+
+.image-display, .histogram-display {
+    display: flex;
+    justify-content: space-around;
+    align-items: flex-start;
+    margin-top: 20px;
+    /* flex-wrap: wrap; */ /* 注释掉：移除换行，强制在一行显示 */
+    gap: 20px;
+}
+
+.image-container, .histogram-container {
+    text-align: center;
+    border: 1px solid #eee;
+    padding: 10px;
+    background: #f9f9f9;
+    border-radius: 4px;
+    min-width: 300px;
+    /* flex: 1; */ /* 注释掉：移除 flex: 1，让容器自然排列 */
+}
+
+.image-container img, .image-container canvas {
+    max-width: 100%;
+    height: auto;
+    max-height: 300px;
+    display: block;
+    margin: 0 auto;
+    object-fit: contain;
+}
+
+.histogram-container canvas {
+    max-width: 100%;
+    height: 150px;
+    background-color: #fff;
+    border: 1px solid #ddd;
+    display: block;
+    margin: 5px auto 0 auto;
+}
+
+.select-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-right: 15px;
+}
+
+h1, h2, h3 {
+    color: #333;
+    margin-top: 0;
+}
+
+#loading {
+    display: none;
+    margin-top: 15px;
+    color: #555;
+}
+
+.processing-message {
+    margin-top: 15px;
+    padding: 10px;
+    background-color: #e9e9e9;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.9em;
+    min-height: 1.5em;
+    line-height: 1.5;
+}
+
+/* 参数面板模态弹窗样式 */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    max-width: 90%;
+    width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.modal-close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #777;
+    min-width: auto;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+.modal-close:hover {
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+.params-panel {
+    padding: 20px;
+}
+
+.params-panel h4 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 10px;
+    text-align: center;
+}
+
+.param-group {
+    margin-bottom: 20px;
+}
+
+.param-group h5 {
+    margin-top: 0;
+    color: #555;
+    border-left: 3px solid #007bff;
+    padding-left: 10px;
+}
+
+.param-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.param-name {
+    width: 150px;
+    font-weight: bold;
+}
+
+.param-value {
+    width: 60px;
+    text-align: right;
+    margin-left: 10px;
+}
+
+.slider-container {
+    flex: 1;
+}
+
+.buttons-row {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+    border-top: 1px solid #eee;
+    padding-top: 15px;
+}
+
+.tooltip {
+    position: relative;
+    display: inline-block;
+    margin-left: 5px;
+    cursor: help;
+}
+
+.tooltip .tooltiptext {
+    visibility: hidden;
+    width: 200px;
+    background-color: #555;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 5px;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    margin-left: -100px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-weight: normal;
+    font-size: 0.9em;
+}
+
+.tooltip:hover .tooltiptext {
+    visibility: visible;
+    opacity: 1;
+}
+
+.algorithm-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.algorithm-options button {
+    min-width: auto;
+    flex: 1;
+    min-width: 100px;
+}
+
+.tabs {
+    display: flex;
+    border-bottom: 1px solid #ddd;
+    margin-bottom: 15px;
+}
+
+.tab {
+    padding: 10px 15px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    margin-right: 5px;
+}
+
+.tab.active {
+    border-color: #ddd;
+    background-color: white;
+    margin-bottom: -1px;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.advanced-hint {
+    font-size: 0.8em;
+    color: #777;
+    margin-top: 5px;
+}
+
+/* 分析报告面板样式 */
+.analysis-panel {
+    margin-top: 20px;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    padding: 20px;
+    width: 100%;
+}
+
+.analysis-panel h3 {
+    color: #007bff;
+    margin-top: 0;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+    text-align: center;
+}
+
+.analysis-section {
+    margin-bottom: 20px;
+}
+
+.analysis-section h4 {
+    color: #444;
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+}
+
+.analysis-section p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+.summary-text {
+    font-size: 1.1em;
+    color: #555;
+    background-color: #f9f9f9;
+    padding: 10px;
+    border-radius: 4px;
+    border-left: 3px solid #007bff;
+}
+
+.adjustments-list {
+    padding-left: 20px;
+}
+
+.adjustments-list li {
+    margin-bottom: 8px;
+    line-height: 1.5;
+}
+
+.tech-details h4.collapsible {
+    cursor: pointer;
+    user-select: none;
+    padding: 8px 0;
+    position: relative;
+}
+
+.tech-details h4.collapsible::after {
+    content: "+";
+    position: absolute;
+    right: 10px;
+    transition: transform 0.3s;
+}
+
+.tech-details h4.collapsible.active::after {
+    content: "-";
+}
+
+.tech-content {
+    background-color: #f5f5f5;
+    padding: 15px;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+.tech-content ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.tech-content li {
+    margin-bottom: 5px;
+}
+
+.tech-content h5 {
+    margin-top: 15px;
+    margin-bottom: 10px;
+    color: #666;
+}
+
+.params-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+}
+
+.algorithm-button {
+    margin: 5px;
+    padding: 8px 12px;
+    border: 1px solid #007bff;
+    background-color: #007bff;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.algorithm-button:hover {
+    background-color: #0056b3;
+    border-color: #004085;
+}
+
+/* 抖动算法按钮选中状态 */
+.algorithm-button.selected {
+    background-color: #004085; /* 更深的背景色 */
+    border-color: #002752; /* 更深的边框色 */
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+    cursor: default;
+}
+
+.results {
+    /* display: flex; */ /* 注释掉：让图像行和直方图行垂直堆叠 */
+} 

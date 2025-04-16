@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>激光雕刻图像预处理器</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>激光雕刻图像预处理器</h1>
+        
+        <div class="controls">
+            <div class="control-row">
+                <label for="imageLoader">选择图片:</label>
+                <input type="file" id="imageLoader" name="imageLoader" accept="image/*"/>
+            </div>
+            
+            <div id="materialControls" class="control-row">
+                <!-- 材料选择器将在此动态生成 -->
+            </div>
+            
+            <div class="control-row">
+                <button id="processButton" disabled>处理图像</button>
+                <button id="downloadButton" disabled>下载处理后图像</button>
+                <div id="loading">处理中，请稍候...</div>
+            </div>
+            
+            <div id="algorithmButtons" class="control-row">
+                <!-- 抖动算法选择按钮将在此动态生成 -->
+            </div>
+            
+            <!-- 新增：锚点灰度滑块 -->
+            <div class="param-item control-row">
+                <label for="anchorGray-slider">锚点灰度 (Anchor): <span id="anchorGray-value">128</span></label>
+                <input type="range" id="anchorGray-slider" min="0" max="255" step="1" value="128">
+                <button id="optimizeAnchorButton" class="secondary small">自动优化</button>
+                <button id="invertButton" class="secondary small">反色 (Invert)</button>
+            </div>
+
+            <div id="processingInfo" class="processing-message"></div>
+        </div>
+
+        <div class="results">
+            <!-- Row for Images -->
+            <div class="result-row image-display">
+                <div class="image-container" id="originalContainer" style="display: none;">
+                    <h3>原始图片</h3>
+                    <img id="originalImage" src="#" alt="原始图像" />
+                </div>
+                <div class="image-container" id="processedContainer" style="display: none;">
+                    <h3>处理后图片</h3>
+                    <canvas id="processedCanvas"></canvas>
+                </div>
+            </div>
+
+            <!-- Row for Histograms -->
+            <div class="result-row histogram-display">
+                <div class="histogram-container" id="originalHistContainer" style="display: none;">
+                    <h3>原始灰度直方图</h3>
+                    <canvas id="originalHistogramCanvas"></canvas>
+                </div>
+                <div class="histogram-container" id="processedHistContainer" style="display: none;">
+                    <h3>处理后灰度直方图</h3>
+                    <canvas id="processedHistogramCanvas"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 分析报告的专属容器 -->
+        <div id="analysisReportContainer"></div>
+
+        <div class="footer">
+            <p class="advanced-hint">提示: 先选择材料和颜色深浅，然后点击"处理图像"。显示参数设置后可以微调各项参数。</p>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html> 
