@@ -509,4 +509,19 @@ h1, h2, h3 {
 
 .results {
     /* display: flex; */ /* 注释掉：让图像行和直方图行垂直堆叠 */
+}
+
+/* 添加错误提示的样式 */
+.error-message {
+    background-color: #ffdddd;
+    color: #d8000c;
+    border-left: 6px solid #f44336;
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 4px;
+}
+
+.important {
+    font-weight: bold;
+    color: #d8000c;
 } 

@@ -5,10 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>激光雕刻图像预处理器</title>
     <link rel="stylesheet" href="css/styles.css">
+    <script defer src="js/lib/face-api.min.js"></script>
 </head>
 <body>
     <div class="container">
         <h1>激光雕刻图像预处理器</h1>
+        
+        <!-- 新增错误提示区 -->
+        <div id="errorMessage" class="error-message" style="display: none;"></div>
         
         <div class="controls">
             <div class="control-row">
@@ -72,6 +76,7 @@
 
         <div class="footer">
             <p class="advanced-hint">提示: 先选择材料和颜色深浅，然后点击"处理图像"。显示参数设置后可以微调各项参数。</p>
+            <p class="advanced-hint important">注意: 如需使用人脸检测功能，请确保下载 face-api.js 模型文件并放置在 <code>/models</code> 目录下。<a href="https://github.com/justadudewhohacks/face-api.js/tree/master/weights" target="_blank">下载模型</a></p>
         </div>
     </div>
 

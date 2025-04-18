@@ -41,6 +41,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let materialSelector = null;
     let laserTypeSelector = null;
     let lastProcessingResult = null;
+    let currentImageFaceDetectionRan = false;
+    let currentImageDetectedType = null;
     
     // 初始化材料选择器
     materialSelector = UI.createMaterialSelector('materialControls', processImage);
@@ -59,66 +61,140 @@ document.addEventListener('DOMContentLoaded', () => {
     processButton.addEventListener('click', processImage);
     downloadButton.addEventListener('click', downloadImage);
     
-    // 添加反色按钮事件监听
-    invertButton.addEventListener('click', () => {
-        if (!baseProcessedImageData) return;
-        
-        if (isCurrentlyInverted) {
-            processedImageData = new ImageData(
-                new Uint8ClampedArray(baseProcessedImageData.data),
-                baseProcessedImageData.width,
-                baseProcessedImageData.height
-            );
-            isCurrentlyInverted = false;
-            invertButton.classList.remove('active');
-        } else {
-            processedImageData = ImageAlgorithms.invertColors(baseProcessedImageData);
-            isCurrentlyInverted = true;
-            invertButton.classList.add('active');
-        }
-        
-        const processedCtx = processedCanvas.getContext('2d');
-        processedCtx.putImageData(processedImageData, 0, 0);
-        
-        const processedHistogram = ImageProcessor.calculateHistogram(processedImageData);
-        ImageProcessor.drawHistogram(processedHistogramCanvas, processedHistogram, '处理后灰度直方图');
-    });
-
-    // 添加自动优化按钮事件监听
-    optimizeAnchorButton.addEventListener('click', () => {
-        if (!originalImageData) {
-            alert("请先上传图片");
-            return;
-        }
-        
-        // 计算最佳锚点灰度值
-        const grayImage = ImageProcessor.convertToGrayscale(originalImageData);
-        const imageStats = ImageProcessor.calculateImageStats(grayImage);
-        const optimalAnchorGray = ImageProcessor.calculateOptimalAnchorGray(imageStats);
-        
-        // 设置滑块值
-        anchorGraySlider.value = optimalAnchorGray;
-        anchorGrayValue.textContent = optimalAnchorGray;
-        
-        // 提示用户
-        processingInfoDiv.textContent = `已优化锚点灰度为 ${optimalAnchorGray}`;
-        
-        // 如果已经有处理过的图像，立即应用新设置
-        if (lastProcessingResult) {
-            processImage();
-        }
-    });
-
-    // 修改：锚点灰度滑块变化时，也调用 processImage
+    // 锚点灰度滑块事件监听
     anchorGraySlider.addEventListener('input', () => {
-        anchorGrayValue.textContent = anchorGraySlider.value; // 更新显示值
+        anchorGrayValue.textContent = anchorGraySlider.value;
         if (originalImageData) {
-            // 使用 debounce 或 throttle 避免过于频繁的调用 (可选优化)
-            // 注意：现在滑块调整也会走完整的 processImage 流程
+            // 标记用户已手动修改
+            anchorGraySlider.dataset.userModified = 'true'; 
             processImage(); 
         }
     });
+    
+    // 新增："自动优化"按钮事件监听
+    optimizeAnchorButton.addEventListener('click', async () => {
+        if (!originalImageData) {
+            showError('请先上传图片');
+            return;
+        }
+        
+        loadingDiv.style.display = 'block';
+        processingInfoDiv.textContent = '正在计算最佳锚点灰度...';
+        optimizeAnchorButton.disabled = true;
 
+        try {
+            // 1. 获取图像统计
+            const grayImage = ImageProcessor.convertToGrayscale(originalImageData);
+            const imageStats = ImageProcessor.calculateImageStats(grayImage);
+            
+            // 2. 获取图像类型 (复用已检测的或重新检测)
+            let imageType = currentImageDetectedType;
+            if (!currentImageFaceDetectionRan || !imageType) {
+                console.log('重新检测图像类型以优化锚点...');
+                imageType = await ImageProcessor.detectImageType(originalImageData);
+                currentImageFaceDetectionRan = true; // 标记已运行
+                currentImageDetectedType = imageType; // 保存结果
+                console.log('检测到类型:', imageType);
+            }
+            
+            // 3. 计算基础最佳锚点
+            let optimalAnchorGray = ImageProcessor.calculateOptimalAnchorGray(imageStats, imageType);
+            console.log(`计算得到的原始最佳锚点: ${optimalAnchorGray}`);
+
+            // 4. 应用金属和深色变体调整
+            const materialId = materialSelector.getSelectedMaterial();
+            const variant = materialSelector.getSelectedVariant();
+            const materialInfo = Materials.getMaterialInfo(materialId);
+            const initialCalculated = optimalAnchorGray;
+            
+            if (materialInfo && materialInfo.isMetal) {
+                optimalAnchorGray = Math.round(optimalAnchorGray * 1.10);
+                console.log(`金属调整 (+10%): ${optimalAnchorGray}`);
+            }
+            if (variant === 'dark') {
+                optimalAnchorGray = Math.round(optimalAnchorGray * 1.05);
+                 console.log(`深色调整 (+5%): ${optimalAnchorGray}`);
+            }
+            optimalAnchorGray = Math.max(0, Math.min(255, optimalAnchorGray)); // 限制范围
+            console.log(`最终优化锚点: ${optimalAnchorGray}`);
+
+            // 5. 更新UI
+            anchorGraySlider.value = optimalAnchorGray;
+            anchorGrayValue.textContent = optimalAnchorGray;
+            anchorGraySlider.dataset.userModified = 'false'; // 重置用户修改标记
+            
+            // 6. 重新处理图像
+            processingInfoDiv.textContent = `已优化锚点灰度为 ${optimalAnchorGray}，正在重新处理...`;
+            await processImage(); // 调用 processImage 使用新值
+            processingInfoDiv.textContent = `已优化锚点灰度为 ${optimalAnchorGray}，处理完成。`;
+            
+        } catch (error) {
+            console.error("优化锚点灰度失败:", error);
+            showError("优化锚点灰度时出错: " + error.message);
+            processingInfoDiv.textContent = '优化锚点灰度失败';
+        } finally {
+            loadingDiv.style.display = 'none';
+            optimizeAnchorButton.disabled = false;
+        }
+    });
+
+    // 新增："反色"按钮事件监听
+    invertButton.addEventListener('click', () => {
+        if (!baseProcessedImageData) {
+            // 如果还没有基础处理图像，则不执行任何操作
+            return;
+        }
+        
+        // 切换反色状态
+        isCurrentlyInverted = !isCurrentlyInverted;
+        console.log(`切换反色状态为: ${isCurrentlyInverted}`);
+        
+        // 更新按钮样式
+        if (isCurrentlyInverted) {
+            invertButton.classList.add('active');
+        } else {
+            invertButton.classList.remove('active');
+        }
+        
+        // 应用或取消反色
+        try {
+            const processedCtx = processedCanvas.getContext('2d');
+            let imageDataToDraw;
+            if (isCurrentlyInverted) {
+                // 应用反色
+                console.log('应用客户端反色...');
+                imageDataToDraw = ImageAlgorithms.invertColors(baseProcessedImageData);
+            } else {
+                // 取消反色，恢复基础图像
+                 console.log('取消客户端反色，恢复基础图像...');
+                imageDataToDraw = baseProcessedImageData;
+            }
+            
+            // 更新 processedImageData 以供下载等使用
+            processedImageData = new ImageData(
+                new Uint8ClampedArray(imageDataToDraw.data),
+                imageDataToDraw.width,
+                imageDataToDraw.height
+            );
+            
+            // 重绘画布
+            processedCanvas.width = imageDataToDraw.width;
+            processedCanvas.height = imageDataToDraw.height;
+            processedCtx.putImageData(processedImageData, 0, 0);
+            
+            // 更新处理后的直方图
+            const processedHistogram = ImageProcessor.calculateHistogram(processedImageData);
+            ImageProcessor.drawHistogram(processedHistogramCanvas, processedHistogram, '处理后灰度直方图');
+
+        } catch (error) {
+            console.error("切换反色时出错:", error);
+            showError("切换反色效果时出错: " + error.message);
+            // 出错时尝试恢复状态
+            isCurrentlyInverted = !isCurrentlyInverted;
+            invertButton.classList.toggle('active');
+        }
+    });
+    
     // 按ESC键关闭模态窗口
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
@@ -134,11 +210,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!lastProcessingResult) return;
         
         loadingDiv.style.display = 'block';
+        processingInfoDiv.textContent = '正在应用抖动设置...';
+        
         setTimeout(() => {
             try {
                 let result;
-                // 获取上次处理的基础参数 (可能包含了正确的 anchorGray)
                 const baseParams = { ...lastProcessingResult.params }; 
+                
+                // 更新：传递当前滑块的值作为覆盖参数，因为用户可能在上次处理后调整了滑块
+                baseParams.anchorGray = parseInt(anchorGraySlider.value, 10);
                 
                 if (algorithmId === 'none') {
                     baseParams.ditherEnabled = false;
@@ -147,49 +227,66 @@ document.addEventListener('DOMContentLoaded', () => {
                     baseParams.ditherType = algorithmId;
                 }
                 
-                // 重新应用抖动/无抖动
                 result = ImageProcessor.processImageWithCustomParams(originalImageData, baseParams);
                 
-                // 手动反色（如果需要），因为 processImageWithCustomParams 不处理
                 const currentVariant = materialSelector.getSelectedVariant();
-                if (currentVariant === 'dark') {
-                    result.processedImage = ImageAlgorithms.invertColors(result.processedImage);
-                    console.log("Applied inversion for dark variant after algorithm select.");
-                }
+                // if (currentVariant === 'dark') {
+                //     result.processedImage = ImageAlgorithms.invertColors(result.processedImage);
+                //     console.log("Applied inversion for dark variant after algorithm select.");
+                // }
                 
-                // 构建 analysis (因为 processImageWithCustomParams 不返回)
+                const detectedImageType = result.params?.detectedImageType || 'unknown';
+                const imageTypeText = detectedImageType === 'portrait' ? '人像照片' : 
+                                    detectedImageType === 'cartoon' ? '卡通/线稿' : '普通照片';
                 const analysis = {
-                    imageSummary: `重新应用抖动设置 (算法: ${algorithmId === 'none' ? '无抖动' : algorithmId}, 锚点灰度: ${baseParams.anchorGray})`,
+                    imageSummary: `重新应用抖动设置 (算法: ${algorithmId === 'none' ? '无抖动' : algorithmId}, 锚点灰度: ${baseParams.anchorGray}, 图像类型: ${imageTypeText})`,
                     adjustmentReasons: [
                         `[抖动调整] 算法更改为 ${algorithmId === 'none' ? '无抖动' : algorithmId}`,
                         `[用户设置] 锚点灰度保持为 ${baseParams.anchorGray}`,
-                        currentVariant === 'dark' ? '[颜色处理] 已为深色材料应用反色' : '[颜色处理] 未应用反色'
+                        // 更新反色说明，直接反映基础处理的反色状态
+                        lastProcessingResult.wasInverted ? '[颜色处理] 深色材料已应用反色' : '[颜色处理] 浅色材料未应用反色' 
                     ],
-                    technicalDetails: { // 从 imageStats 获取
+                    technicalDetails: { 
                         meanBrightness: result.imageStats?.mean.toFixed(2) || 'N/A',
                         standardDeviation: result.imageStats?.stdDev.toFixed(2) || 'N/A',
                         peaks: result.imageStats?.peaks?.map(p => p.toFixed(0)).join(', ') || 'N/A',
-                        valleys: result.imageStats?.valleys?.map(v => v.toFixed(0)).join(', ') || 'N/A'
+                        valleys: result.imageStats?.valleys?.map(v => v.toFixed(0)).join(', ') || 'N/A',
+                        imageType: detectedImageType
+                    },
+                    imageTypeDetection: {
+                        imageType: detectedImageType,
+                        summary: `图像类型: ${imageTypeText}`,
+                        confidence: 0.85
                     }
                 };
                 result.analysis = analysis;
                 
                 lastProcessingResult = result;
-                // 更新基础处理结果，并重置反色状态
                 baseProcessedImageData = new ImageData(
                     new Uint8ClampedArray(result.processedImage.data),
                     result.processedImage.width,
                     result.processedImage.height
                 );
-                processedImageData = baseProcessedImageData; // 初始显示未经反色的
-                isCurrentlyInverted = false;
+                processedImageData = baseProcessedImageData; 
+                // 更新反色状态
+                isCurrentlyInverted = lastProcessingResult.wasInverted; 
+                if (isCurrentlyInverted) {
+                    invertButton.classList.add('active');
+                } else {
                 invertButton.classList.remove('active');
+                }
+                
+                // 更新UI元素
+                anchorGraySlider.value = result.params.anchorGray;
+                anchorGrayValue.textContent = result.params.anchorGray;
                 
                 updateResults(result);
                 
+                processingInfoDiv.textContent = `已应用${algorithmId === 'none' ? '无抖动' : algorithmId + '抖动'}设置`;
+                
             } catch (error) {
                 console.error("处理错误:", error);
-                alert("处理图片时发生错误: " + error.message);
+                showError("应用抖动设置时发生错误: " + error.message);
             } finally {
                 loadingDiv.style.display = 'none';
             }
@@ -198,70 +295,102 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // 处理图片加载
     function handleImage(e) {
-        // 检查是否有文件被选择
+        const errorMessageDiv = document.getElementById('errorMessage');
+        errorMessageDiv.style.display = 'none';
+        errorMessageDiv.textContent = '';
+        
         if (!e.target.files || e.target.files.length === 0) {
-            // 用户没有选择文件或取消了选择
             console.log("文件选择已取消");
-            // 不做任何处理，保持当前状态
             return;
+        }
+        
+        // 重置人脸检测状态
+        currentImageFaceDetectionRan = false;
+        currentImageDetectedType = null;
+        console.log('新图像加载，重置人脸检测状态');
+        
+        const file = e.target.files[0];
+        const fileSize = file.size / (1024 * 1024); // 转换为MB
+        
+        // 检查文件大小
+        if (fileSize > 10) { // 超过10MB
+            showWarning(`图像文件过大 (${fileSize.toFixed(2)}MB)，可能影响处理性能。`);
         }
         
         const reader = new FileReader();
         reader.onload = function(event) {
-            originalImage.onload = () => {
-                originalWidth = originalImage.naturalWidth;
-                originalHeight = originalImage.naturalHeight;
+            try {
+                originalImage.onload = () => {
+                    originalWidth = originalImage.naturalWidth;
+                    originalHeight = originalImage.naturalHeight;
+                    
+                    // 检查图像尺寸
+                    if (originalWidth * originalHeight > 4000 * 3000) {
+                        showWarning("图像分辨率较大，处理过程可能会较慢。");
+                    }
+                    
+                    // 绘制原始图像到临时画布获取图像数据
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = originalWidth;
+                    tempCanvas.height = originalHeight;
+                    const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+                    tempCtx.drawImage(originalImage, 0, 0);
+                    
+                    try {
+                        originalImageData = tempCtx.getImageData(0, 0, originalWidth, originalHeight);
+                        processButton.disabled = false;
+                        downloadButton.disabled = true;
+                        originalContainer.style.display = 'block';
+                        processedContainer.style.display = 'none';
+                        originalHistContainer.style.display = 'none';
+                        processedHistContainer.style.display = 'none';
+                        processingInfoDiv.textContent = '';
+                        
+                        // --- 恢复：计算并设置初始最佳锚点灰度 --- 
+                        console.log('计算初始最佳锚点灰度...');
+                        const grayImage = ImageProcessor.convertToGrayscale(originalImageData);
+                        const imageStats = ImageProcessor.calculateImageStats(grayImage);
+                        // 注意：这里调用 calculateOptimalAnchorGray 时不传入 imageType，
+                        // 让它使用默认的基于统计的计算方法，首次 processImage 时会根据检测结果再次优化。
+                        // 或者，如果我们想让初始值更准，可以在这里做一个快速的非人脸检测判断，
+                        // 但为了逻辑分离，先用纯统计计算。
+                        const optimalAnchorGray = ImageProcessor.calculateOptimalAnchorGray(imageStats); // 恢复调用
+                        
+                        // 设置滑块值和显示
+                        anchorGraySlider.value = optimalAnchorGray;
+                        anchorGrayValue.textContent = optimalAnchorGray;
+                        console.log(`初始最佳锚点灰度计算完成: ${optimalAnchorGray}`);
+                        // --- 恢复结束 --- 
+                        
+                        const originalHistogram = imageStats.histogram; // 复用 imageStats
+                        ImageProcessor.drawHistogram(originalHistogramCanvas, originalHistogram, '原始灰度直方图');
+                        originalHistContainer.style.display = 'block';
+                        processingInfoDiv.textContent = `已自动优化锚点灰度为 ${optimalAnchorGray}。请选择材料并处理。`; // 更新提示
+                        
+                    } catch (err) {
+                        console.error("获取图像数据错误:", err);
+                        showError("处理图像数据时出错: " + err.message);
+                    }
+                };
                 
-                // 绘制原始图像到临时画布获取图像数据
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = originalWidth;
-                tempCanvas.height = originalHeight;
-                const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
-                tempCtx.drawImage(originalImage, 0, 0);
+                originalImage.onerror = (err) => {
+                    console.error("图像加载错误:", err);
+                    showError("无法加载图像，图像格式可能不受支持。");
+                };
                 
-                try {
-                    originalImageData = tempCtx.getImageData(0, 0, originalWidth, originalHeight);
-                    processButton.disabled = false;
-                    downloadButton.disabled = true;
-                    originalContainer.style.display = 'block';
-                    processedContainer.style.display = 'none';
-                    originalHistContainer.style.display = 'none';
-                    processedHistContainer.style.display = 'none';
-                    processingInfoDiv.textContent = '';
-                    
-                    // 新增：计算最佳锚点灰度值并自动设置
-                    const grayImage = ImageProcessor.convertToGrayscale(originalImageData);
-                    const imageStats = ImageProcessor.calculateImageStats(grayImage);
-                    const optimalAnchorGray = ImageProcessor.calculateOptimalAnchorGray(imageStats);
-                    
-                    // 设置滑块值
-                    anchorGraySlider.value = optimalAnchorGray;
-                    anchorGrayValue.textContent = optimalAnchorGray;
-                    
-                    // 可选：显示直方图（帮助用户理解图像特性）
-                    const originalHistogram = imageStats.histogram;
-                    ImageProcessor.drawHistogram(originalHistogramCanvas, originalHistogram, '原始灰度直方图');
-                    originalHistContainer.style.display = 'block';
-                    
-                    // 可选：添加提示信息
-                    processingInfoDiv.textContent = `已根据图像特性自动设置锚点灰度为 ${optimalAnchorGray}`;
-                    
-                } catch (err) {
-                    console.error("获取图像数据错误:", err);
-                    alert("无法处理此图片，可能是跨域问题或格式不支持。");
-                    resetUI();
-                }
-            };
-            
-            originalImage.onerror = () => {
-                alert("无法加载图片。");
-                resetUI();
-            };
-            
-            originalImage.src = event.target.result;
+                originalImage.src = event.target.result;
+            } catch (error) {
+                console.error("读取文件时发生错误:", error);
+                showError("读取文件时发生错误: " + error.message);
+            }
         };
         
-        reader.readAsDataURL(e.target.files[0]);
+        reader.onerror = function(error) {
+            console.error("文件读取错误:", error);
+            showError("文件读取失败，请重试。");
+        };
+        
+        reader.readAsDataURL(file);
     }
     
     // 重置UI状态
@@ -279,90 +408,214 @@ document.addEventListener('DOMContentLoaded', () => {
         resetParams(); // 重置锚点滑块
     }
     
-    // 处理图像 (修改为使用自定义参数流程以包含 anchorGray)
-    function processImage() {
+    // 处理图像
+    async function processImage() {
+        const errorMessageDiv = document.getElementById('errorMessage');
+        errorMessageDiv.style.display = 'none';
+        errorMessageDiv.textContent = '';
+        
         if (!originalImageData) {
-            // 如果是滑块触发但无图，不提示
             if (event && event.target === anchorGraySlider) return;
-            alert("请先上传图片");
+            showError("请先上传图片");
             return;
         }
         
         loadingDiv.style.display = 'block';
         processButton.disabled = true;
         downloadButton.disabled = true;
-        processingInfoDiv.textContent = '';
+        // 根据是否已检测过，设置不同的提示信息
+        if (!currentImageFaceDetectionRan) {
+            processingInfoDiv.textContent = '正在分析图像并检测人脸(首次)，请稍候...';
+        } else {
+            processingInfoDiv.textContent = '正在重新处理图像，请稍候...';
+        }
         
-        // 使用setTimeout允许UI更新，再进行处理
-        setTimeout(() => {
+        try {
+            const materialId = materialSelector.getSelectedMaterial();
+            const variant = materialSelector.getSelectedVariant();
+            const laserType = laserTypeSelector.getSelectedLaserType();
+            const currentAnchorGray = parseInt(anchorGraySlider.value, 10);
+            
+            console.log('开始处理图像...');
+            
+            // 标记用户是否修改了滑块，以便 processImage 判断是否使用 override
+            const userModifiedAnchor = anchorGraySlider.dataset.userModified === 'true';
+            
+            // 构建传递给 ImageProcessor 的参数
+            const processorParams = {};
+            // 只有当用户手动修改了滑块时，才传递 anchorGray 作为覆盖参数
+            if (userModifiedAnchor) {
+                processorParams.anchorGray = currentAnchorGray;
+                console.log('用户已手动修改锚点，传递覆盖值:', currentAnchorGray);
+            } else {
+                 console.log('用户未手动修改锚点，将由后端自动计算');
+            }
+            
+            // 如果之前已经运行过检测，则传递已知类型
+            if (currentImageFaceDetectionRan) {
+                processorParams.knownImageType = currentImageDetectedType;
+                console.log('传递已知图像类型:', currentImageDetectedType);
+            } else {
+                console.log('首次处理，不传递已知图像类型，将执行检测。');
+            }
+            
+            // 调用恢复后的 ImageProcessor.processImage
+            const result = await ImageProcessor.processImage(
+                originalImageData, 
+                materialId, 
+                variant, 
+                laserType, 
+                processorParams // 传递可能包含 knownImageType 的参数
+            );
+            console.log('图像处理完成');
+            
+            // 如果是首次运行检测，则记录结果
+            if (!currentImageFaceDetectionRan) {
+                currentImageFaceDetectionRan = true;
+                currentImageDetectedType = result.params?.detectedImageType;
+                console.log('首次图像类型检测完成，记录结果:', currentImageDetectedType);
+                
+                // 添加人脸检测结果提示
+                if (currentImageDetectedType === 'portrait') {
+                    // 短暂显示提示后恢复默认信息或处理信息
+                    const originalInfo = processingInfoDiv.textContent;
+                    UI.showProcessingInfo('processingInfo', '检测到人像照片，已优化处理参数。', 2000, () => {
+                         UI.showProcessingInfo('processingInfo', result.info);
+                    });
+                } else {
+                    // 如果不是人像，直接显示处理信息
+                    UI.showProcessingInfo('processingInfo', result.info);
+                }
+            } else {
+                // 如果不是首次，直接显示处理信息
+                UI.showProcessingInfo('processingInfo', result.info);
+            }
+
+            lastProcessingResult = result;
+            baseProcessedImageData = new ImageData(
+                new Uint8ClampedArray(result.processedImage.data),
+                result.processedImage.width,
+                result.processedImage.height
+            );
+            processedImageData = baseProcessedImageData;
+            // 设置反色状态
+            isCurrentlyInverted = result.wasInverted;
+            if (isCurrentlyInverted) {
+                invertButton.classList.add('active');
+            } else {
+            invertButton.classList.remove('active');
+            }
+            
+            // 更新UI元素
+            anchorGraySlider.value = result.params.anchorGray;
+            anchorGrayValue.textContent = result.params.anchorGray;
+            
+            updateResults(result);
+            
+        } catch (error) {
+            console.error("处理错误:", error);
+            showError("处理图像时发生错误: " + error.message);
+            
+            // 保留回退逻辑
             try {
+                console.log('尝试使用回退方法处理图像...');
                 const materialId = materialSelector.getSelectedMaterial();
                 const variant = materialSelector.getSelectedVariant();
                 const laserType = laserTypeSelector.getSelectedLaserType();
-                
-                // 获取当前的 anchorGray 值
                 const currentAnchorGray = parseInt(anchorGraySlider.value, 10);
+                const customParams = { 
+                    anchorGray: currentAnchorGray,
+                    brightness: 0, contrast: 1.2, sharpness: 0.5, 
+                    levelInLow: 0, levelInHigh: 255, levelOutLow: 0, levelOutHigh: 255,
+                    ditherEnabled: false
+                };
                 
-                // 调用新的 processImage 接口，传递覆盖参数
-                const result = ImageProcessor.processImage(
+                const fallbackResult = ImageProcessor.processImageWithCustomParams(
                     originalImageData, 
-                    materialId, 
-                    variant, 
-                    laserType, 
-                    { anchorGray: currentAnchorGray } // 传递覆盖对象
+                    customParams
                 );
-
-                // 不再需要手动反色和构建 analysis，processImage 会处理
-                // if (variant === 'dark') { ... }
-                // const analysis = { ... }; result.analysis = analysis;
-
-                lastProcessingResult = result;
-                // 更新基础处理结果，并重置反色状态
+                console.log('回退处理成功');
+                
+                // 移除手动反色逻辑
+                // if (variant === 'dark') {
+                //     fallbackResult.processedImage = ImageAlgorithms.invertColors(fallbackResult.processedImage);
+                // }
+                
+                lastProcessingResult = fallbackResult;
                 baseProcessedImageData = new ImageData(
-                    new Uint8ClampedArray(result.processedImage.data),
-                    result.processedImage.width,
-                    result.processedImage.height
+                    new Uint8ClampedArray(fallbackResult.processedImage.data),
+                    fallbackResult.processedImage.width,
+                    fallbackResult.processedImage.height
                 );
-                processedImageData = baseProcessedImageData; // 初始显示未经反色的
-                isCurrentlyInverted = false;
+                processedImageData = baseProcessedImageData;
+                // 设置反色状态
+                isCurrentlyInverted = fallbackResult.wasInverted || (variant === 'dark'); // 回退模式假设深色需要反色
+                if (isCurrentlyInverted) {
+                    invertButton.classList.add('active');
+                } else {
                 invertButton.classList.remove('active');
+                }
                 
-                updateResults(result);
+                // 更新UI元素 (回退模式)
+                anchorGraySlider.value = customParams.anchorGray; // 回退模式使用用户输入值
+                anchorGrayValue.textContent = customParams.anchorGray;
                 
-            } catch (error) {
-                console.error("处理错误:", error);
-                alert("处理图片时发生错误: " + error.message);
-                resetUI(); // 发生错误时重置UI
-            } finally {
-                loadingDiv.style.display = 'none';
-                processButton.disabled = false;
+                updateResults(fallbackResult);
+                showWarning("人脸检测功能可能存在问题，已使用基本处理模式。");
+                
+            } catch (fallbackError) {
+                console.error("回退处理也失败:", fallbackError);
+                showError("所有处理方法均失败，请检查图像格式是否正确。");
+                resetUI();
             }
-        }, 50);
+        } finally {
+            loadingDiv.style.display = 'none';
+            processButton.disabled = false;
+        }
+    }
+    
+    // 显示错误信息
+    function showError(message) {
+        const errorMessageDiv = document.getElementById('errorMessage');
+        errorMessageDiv.textContent = message;
+        errorMessageDiv.style.display = 'block';
+        console.error(message);
+    }
+    
+    // 显示警告信息
+    function showWarning(message) {
+        const errorMessageDiv = document.getElementById('errorMessage');
+        errorMessageDiv.textContent = "⚠️ " + message;
+        errorMessageDiv.style.backgroundColor = "#fff3cd";
+        errorMessageDiv.style.color = "#856404";
+        errorMessageDiv.style.borderLeftColor = "#ffeeba";
+        errorMessageDiv.style.display = 'block';
+        console.warn(message);
     }
     
     // 更新处理结果显示
     function updateResults(result) {
-        // 存储基础处理结果
         baseProcessedImageData = new ImageData(
             new Uint8ClampedArray(result.processedImage.data),
             result.processedImage.width,
             result.processedImage.height
         );
-        processedImageData = baseProcessedImageData; // 初始显示基础结果
-        isCurrentlyInverted = false; // 重置反色状态
+        processedImageData = baseProcessedImageData;
+        isCurrentlyInverted = result.wasInverted;
+        if (isCurrentlyInverted) {
+            invertButton.classList.add('active');
+        } else {
         invertButton.classList.remove('active');
+        }
         
-        // 显示处理后图像 (显示基础结果)
         processedCanvas.width = originalWidth;
         processedCanvas.height = originalHeight;
         const processedCtx = processedCanvas.getContext('2d');
         processedCtx.putImageData(result.processedImage, 0, 0);
         
-        // 计算直方图
         const grayHistogram = ImageProcessor.calculateHistogram(result.grayImage);
-        const processedHistogram = ImageProcessor.calculateHistogram(baseProcessedImageData); // 基于基础结果计算
+        const processedHistogram = ImageProcessor.calculateHistogram(baseProcessedImageData);
         
-        // 绘制直方图
         originalHistogramCanvas.width = 300;
         originalHistogramCanvas.height = 150;
         processedHistogramCanvas.width = 300;
@@ -371,20 +624,16 @@ document.addEventListener('DOMContentLoaded', () => {
         ImageProcessor.drawHistogram(originalHistogramCanvas, grayHistogram, '原始灰度直方图');
         ImageProcessor.drawHistogram(processedHistogramCanvas, processedHistogram, '处理后灰度直方图');
         
-        // 显示处理信息
         UI.showProcessingInfo('processingInfo', result.info);
         
-        // 更新抖动按钮选中状态
         const selectedAlgorithm = result.params.ditherEnabled ? result.params.ditherType : 'none';
         UI.updateDitherButtonSelection(selectedAlgorithm);
         
-        // 显示结果容器
         originalHistContainer.style.display = 'block';
         processedContainer.style.display = 'block';
         processedHistContainer.style.display = 'block';
         downloadButton.disabled = false;
         
-        // 创建并显示分析报告
         if (result.analysis) {
             displayAnalysisReport(result.analysis, result.imageStats, result.params);
         }
@@ -392,23 +641,19 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // 显示分析报告
     function displayAnalysisReport(analysis, imageStats, params) {
-        // 检查是否已存在分析面板，如果存在则移除
         const existingPanel = document.getElementById('analysisPanel');
         if (existingPanel) {
             existingPanel.remove();
         }
         
-        // 创建分析面板
         const analysisPanel = document.createElement('div');
         analysisPanel.id = 'analysisPanel';
         analysisPanel.className = 'analysis-panel';
         
-        // 创建标题
         const panelTitle = document.createElement('h3');
         panelTitle.textContent = '图像分析报告';
         analysisPanel.appendChild(panelTitle);
         
-        // 添加图像特性总结
         if (analysis.imageSummary) {
             const summarySection = document.createElement('div');
             summarySection.className = 'analysis-section';
@@ -425,7 +670,6 @@ document.addEventListener('DOMContentLoaded', () => {
             analysisPanel.appendChild(summarySection);
         }
         
-        // 添加调整原因
         if (analysis.adjustmentReasons && analysis.adjustmentReasons.length > 0) {
             const reasonsSection = document.createElement('div');
             reasonsSection.className = 'analysis-section';
@@ -447,7 +691,6 @@ document.addEventListener('DOMContentLoaded', () => {
             analysisPanel.appendChild(reasonsSection);
         }
         
-        // 添加技术详情（可折叠）
         if (analysis.technicalDetails) {
             const techSection = document.createElement('div');
             techSection.className = 'analysis-section tech-details';
@@ -461,7 +704,6 @@ document.addEventListener('DOMContentLoaded', () => {
             techContent.className = 'tech-content';
             techContent.style.display = 'none';
             
-            // 添加统计数据
             const statsList = document.createElement('ul');
             
             const meanItem = document.createElement('li');
@@ -486,7 +728,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
             techContent.appendChild(statsList);
             
-            // 添加当前使用的参数
             const paramsTitle = document.createElement('h5');
             paramsTitle.textContent = '应用参数';
             techContent.appendChild(paramsTitle);
@@ -495,12 +736,10 @@ document.addEventListener('DOMContentLoaded', () => {
             paramsList.className = 'params-list';
             
             Object.entries(params).forEach(([key, value]) => {
-                // 跳过已废弃的输出色阶参数
                 if (key === 'levelOutLow' || key === 'levelOutHigh') {
                     return; 
                 }
                 
-                // 如果抖动未启用，则跳过抖动阈值和抖动类型参数
                 if (!params.ditherEnabled && (key === 'ditherThreshold' || key === 'ditherType')) {
                     return;
                 }
@@ -508,17 +747,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const item = document.createElement('li');
                 let displayValue = value;
                 
-                // 格式化特定值
                 if (key === 'contrast') {
                     displayValue = (value * 100).toFixed(0) + '%';
                 } else if (key === 'ditherEnabled') {
                     displayValue = value ? '是' : '否';
                 } else if (key === 'ditherType' && value) {
-                    // 将抖动类型的驼峰命名转为更易读的名称 (可选)
                     const typeNames = { 'floydSteinberg': 'Floyd-Steinberg', 'atkinson': 'Atkinson', 'jarvis': 'Jarvis', 'ordered': 'Ordered', 'bayer': 'Bayer' };
                     displayValue = typeNames[value] || value;
                 } else if (typeof value === 'number' && !Number.isInteger(value)) {
-                    // 对非整数数字保留一定小数位 (例如对比度调整后的结果可能不是整数)
                     displayValue = value.toFixed(2);
                 }
                 
@@ -529,7 +765,6 @@ document.addEventListener('DOMContentLoaded', () => {
             techContent.appendChild(paramsList);
             techSection.appendChild(techContent);
             
-            // 添加点击事件切换显示/隐藏
             techTitle.addEventListener('click', () => {
                 if (techContent.style.display === 'none') {
                     techContent.style.display = 'block';
@@ -543,21 +778,15 @@ document.addEventListener('DOMContentLoaded', () => {
             analysisPanel.appendChild(techSection);
         }
         
-        // 修改：添加到新的专属容器中
         const reportContainer = document.getElementById('analysisReportContainer');
         if (reportContainer) {
-            // 清空旧报告（如果存在）
             reportContainer.innerHTML = '';
             reportContainer.appendChild(analysisPanel);
         } else {
             console.error("Analysis report container not found!");
-            // 可以考虑降级：仍然添加到 results 容器
-            // const resultsContainer = document.querySelector('.results');
-            // resultsContainer.appendChild(analysisPanel);
         }
     }
     
-    // 获取参数的显示名称
     function getParamDisplayName(paramKey) {
         const displayNames = {
             brightness: '亮度',
@@ -576,39 +805,33 @@ document.addEventListener('DOMContentLoaded', () => {
         return displayNames[paramKey] || paramKey;
     }
     
-    // 下载处理后图像
     function downloadImage() {
         if (!processedImageData) {
             alert("没有处理后的图像可供下载。");
             return;
         }
         
-        // 绘制最终处理数据到可见画布
         const finalCanvas = document.getElementById('processedCanvas');
         finalCanvas.width = processedImageData.width;
         finalCanvas.height = processedImageData.height;
         const finalCtx = finalCanvas.getContext('2d');
         finalCtx.putImageData(processedImageData, 0, 0);
         
-        // 创建下载链接
         const link = document.createElement('a');
         const materialId = materialSelector.getSelectedMaterial();
         const variant = materialSelector.getSelectedVariant();
         const filename = `laser_processed_${materialId}_${variant}_${new Date().getTime()}.png`;
         link.download = filename;
         
-        // 使用PNG格式无损输出
         link.href = finalCanvas.toDataURL('image/png');
         link.click();
     }
 
-    // 重置参数 (只重置 anchorGray)
     function resetParams() {
-        const defaultAnchorGray = Materials.defaultParams.anchorGray || 128; // 从Materials获取默认值
+        const defaultAnchorGray = Materials.defaultParams.anchorGray || 128;
         anchorGraySlider.value = defaultAnchorGray;
-        anchorGrayValue.textContent = defaultAnchorGray; // 确保显示值也重置
+        anchorGrayValue.textContent = defaultAnchorGray;
         
-        // 清除用户提示
         if (processingInfoDiv) {
             processingInfoDiv.textContent = '已重置锚点灰度为默认值';
         }

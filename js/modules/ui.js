@@ -34,15 +34,14 @@ const UI = (() => {
         
         const colors = [
             { id: 'dark', name: '深色' },
-            { id: 'neutral', name: '中性' },
-            { id: 'light', name: '浅色' }
+            { id: 'neutral', name: '浅色' }
         ];
         
         colors.forEach(color => {
             const option = document.createElement('option');
             option.value = color.id;
             option.textContent = color.name;
-            option.selected = color.id === 'neutral'; // 默认选中中性
+            option.selected = color.id === 'neutral';
             colorSelect.appendChild(option);
         });
         
@@ -284,27 +283,6 @@ const UI = (() => {
         );
         
         panel.appendChild(levelsGroup);
-        
-        // 添加操作按钮
-        const buttonsRow = document.createElement('div');
-        buttonsRow.className = 'buttons-row';
-        
-        const resetButton = document.createElement('button');
-        resetButton.textContent = '重置为默认';
-        resetButton.className = 'secondary small';
-        resetButton.addEventListener('click', () => {
-            updateParamsPanel(panel, materialId, variant);
-        });
-        
-        const applyButton = document.createElement('button');
-        applyButton.textContent = '应用参数';
-        applyButton.className = 'small';
-        applyButton.id = 'applyCustomParams';
-        
-        buttonsRow.appendChild(resetButton);
-        buttonsRow.appendChild(applyButton);
-        
-        panel.appendChild(buttonsRow);
     };
     
     // 创建滑块控件
