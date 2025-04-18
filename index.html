@@ -13,7 +13,10 @@
         
         <!-- 新增错误提示区 -->
         <div id="errorMessage" class="error-message" style="display: none;"></div>
-        
+        <div class="footer">
+            <p class="advanced-hint">提示: 先选择材料、颜色深浅、激光器类型，然后点击"处理图像"。显示参数设置后可以微调各项参数。</p>
+            <!-- <p class="advanced-hint important">注意: 如需使用人脸检测功能，请确保下载 face-api.js 模型文件并放置在 <code>/models</code> 目录下。<a href="https://github.com/justadudewhohacks/face-api.js/tree/master/weights" target="_blank">下载模型</a></p> -->
+        </div>
         <div class="controls">
             <div class="control-row">
                 <label for="imageLoader">选择图片:</label>
@@ -38,7 +41,7 @@
             <div class="param-item control-row">
                 <label for="anchorGray-slider">锚点灰度 (Anchor): <span id="anchorGray-value">128</span></label>
                 <input type="range" id="anchorGray-slider" min="0" max="255" step="1" value="128">
-                <button id="optimizeAnchorButton" class="secondary small">自动优化</button>
+                <button id="optimizeAnchorButton" class="secondary small">重置为推荐值</button>
                 <button id="invertButton" class="secondary small">反色 (Invert)</button>
             </div>
 
@@ -73,11 +76,7 @@
         
         <!-- 分析报告的专属容器 -->
         <div id="analysisReportContainer"></div>
-
-        <div class="footer">
-            <p class="advanced-hint">提示: 先选择材料和颜色深浅，然后点击"处理图像"。显示参数设置后可以微调各项参数。</p>
-            <p class="advanced-hint important">注意: 如需使用人脸检测功能，请确保下载 face-api.js 模型文件并放置在 <code>/models</code> 目录下。<a href="https://github.com/justadudewhohacks/face-api.js/tree/master/weights" target="_blank">下载模型</a></p>
-        </div>
+       
     </div>
 
     <script type="module" src="js/main.js"></script>
