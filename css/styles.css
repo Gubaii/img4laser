@@ -56,8 +56,16 @@ button {
     min-width: 120px;
 }
 
-button:hover {
-    background-color: #0056b3;
+/* 处理图像主按钮样式 */
+#processButton {
+    padding-left: 64px;
+    padding-right: 64px;
+    font-weight: 500;
+    background-color: #28a745;
+}
+
+#processButton:hover {
+    background-color: #218838;
 }
 
 button:disabled {
