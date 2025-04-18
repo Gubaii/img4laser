@@ -635,7 +635,12 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadButton.disabled = false;
         
         if (result.analysis) {
-            displayAnalysisReport(result.analysis, result.imageStats, result.params);
+            displayAnalysisReport(result.analysis, result.imageStats, result.initialParams);
+        }
+        
+        if (anchorGraySlider) {
+            anchorGraySlider.value = result.params.anchorGray;
+            anchorGrayValue.textContent = result.params.anchorGray;
         }
     }
     
@@ -697,12 +702,12 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const techTitle = document.createElement('h4');
             techTitle.textContent = '技术详情';
-            techTitle.className = 'collapsible';
+            techTitle.className = 'collapsible active';
             techSection.appendChild(techTitle);
             
             const techContent = document.createElement('div');
             techContent.className = 'tech-content';
-            techContent.style.display = 'none';
+            techContent.style.display = 'block';
             
             const statsList = document.createElement('ul');
             

@@ -206,6 +206,7 @@ h1, h2, h3 {
 }
 
 /* 参数面板模态弹窗样式 */
+/*
 .modal-overlay {
     display: none;
     position: fixed;
@@ -343,6 +344,9 @@ h1, h2, h3 {
     visibility: visible;
     opacity: 1;
 }
+*/
+
+/* 结束移除参数面板模态弹窗样式 */
 
 .algorithm-options {
     display: flex;

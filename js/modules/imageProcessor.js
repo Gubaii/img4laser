@@ -717,9 +717,9 @@ const ImageProcessor = (() => {
         
         switch (imageType) {
             case 'portrait':
-                // 人像照片：使用我们之前调整过的系数和最小值
-                result = Math.max(Math.round(weightedValue * 0.6), 65);
-                console.log(`人像照片锚点计算: 加权值${Math.round(weightedValue)} * 0.6 = ${Math.round(weightedValue * 0.6)}, 最终值: ${result}`);
+                // (!!! 修改 !!!) 提高系数和最低值
+                result = Math.max(Math.round(weightedValue * 0.65), 70);
+                console.log(`人像照片锚点计算: 加权值${Math.round(weightedValue)} * 0.65 = ${Math.round(weightedValue * 0.65)}, 最终值: ${result}`);
                 return result;
                 
             case 'cartoon':
@@ -746,18 +746,18 @@ const ImageProcessor = (() => {
                 
             case 'photo':
             default:
-                // 普通照片逻辑不变
+                // (!!! 修改 !!!) 提高系数和最低值
                 if (stdDev < 40) {
-                    result = Math.max(Math.round(weightedValue * 0.66), 72);
-                    console.log(`普通照片(低对比度)锚点计算: 加权值${Math.round(weightedValue)} * 0.66 = ${Math.round(weightedValue * 0.66)}, 最终值: ${result}`);
+                    result = Math.max(Math.round(weightedValue * 0.68), 75);
+                    console.log(`普通照片(低对比度)锚点计算: 加权值${Math.round(weightedValue)} * 0.68 = ${Math.round(weightedValue * 0.68)}, 最终值: ${result}`);
                     return result;
                 } else if (stdDev > 60) {
-                    result = Math.max(Math.round(weightedValue * 0.69), 75);
-                    console.log(`普通照片(高对比度)锚点计算: 加权值${Math.round(weightedValue)} * 0.69 = ${Math.round(weightedValue * 0.69)}, 最终值: ${result}`);
+                    result = Math.max(Math.round(weightedValue * 0.71), 78);
+                    console.log(`普通照片(高对比度)锚点计算: 加权值${Math.round(weightedValue)} * 0.71 = ${Math.round(weightedValue * 0.71)}, 最终值: ${result}`);
                     return result;
                 } else {
-                    result = Math.max(Math.round(weightedValue * 0.72), 77);
-                    console.log(`普通照片(中对比度)锚点计算: 加权值${Math.round(weightedValue)} * 0.72 = ${Math.round(weightedValue * 0.72)}, 最终值: ${result}`);
+                    result = Math.max(Math.round(weightedValue * 0.74), 80);
+                    console.log(`普通照片(中对比度)锚点计算: 加权值${Math.round(weightedValue)} * 0.74 = ${Math.round(weightedValue * 0.74)}, 最终值: ${result}`);
                     return result;
                 }
         }
@@ -940,8 +940,11 @@ const ImageProcessor = (() => {
         
         // 5. 根据图像特性和激光器类型调整参数
         let { params: nonDitherParams, info: initialInfo, analysis } = 
-            Materials.adjustParamsForImageStats(params, imageStats, laserType); 
+            Materials.adjustParamsForImageStats(params, imageStats, imageType, laserType);
         
+        // (!!! 新增 !!!) 保存初始基础参数，不含最终锚点计算
+        const initialBaseParams = { ...nonDitherParams };
+
         // 添加图像类型检测信息到分析报告
         let imageTypeText = imageType === 'portrait' ? '人像照片' : 
                              imageType === 'cartoon' ? '卡通/线稿' : '普通照片';
@@ -1105,9 +1108,11 @@ const ImageProcessor = (() => {
             processedImage: finalImage, // 使用可能已反色的 finalImage
             wasInverted: wasInverted, // 传递反色状态
             imageStats: imageStats,
-            params: finalParams,
+            initialParams: initialBaseParams, // (!!! 新增 !!!) 返回初始基础参数
+            params: finalParams,             // 最终应用参数
             info: finalInfo,
-            analysis: analysis
+            analysis: analysis,
+            detectedImageType: imageType // (!!! 确保返回检测类型 !!!)
         };
     };
     

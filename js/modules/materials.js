@@ -213,7 +213,7 @@ const Materials = (() => {
     };
 
     // 根据图像特性和激光器类型调整材料参数
-    const adjustParamsForImageStats = (params, imageStats, laserType = 'CO2') => {
+    const adjustParamsForImageStats = (params, imageStats, imageType, laserType = 'CO2') => {
         const { mean, stdDev, histogram, peaks, valleys } = imageStats;
         let adjustedParams = { ...params };
         
@@ -338,6 +338,31 @@ const Materials = (() => {
             adjustedParams.sharpness = Math.max(0, Math.min(100, adjustedParams.sharpness + sharpnessAdjustment));
         } else {
             analysis.adjustmentReasons.push("[Fiber 激光器：不进行自动锐化调整]");
+        }
+
+        // *** 修改：直接使用传入的 imageType ***
+        if (imageType === 'cartoon') {
+            const originalSharpness = adjustedParams.sharpness;
+            adjustedParams.sharpness = 5; // 卡通/线稿强制使用低锐化值
+            analysis.adjustmentReasons.push(`[图像类型调整] 检测到卡通/线稿，强制降低锐化值 (从 ${originalSharpness.toFixed(0)} 到 ${adjustedParams.sharpness})`);
+            info += `检测到卡通/线稿，强制降低锐化；`;
+            hasAdjustments = true;
+        } else if (imageType === 'portrait') {
+            const originalSharpness = adjustedParams.sharpness;
+            if (originalSharpness > 10) { // 人像也应避免过度锐化
+                adjustedParams.sharpness = 10;
+                analysis.adjustmentReasons.push(`[图像类型调整] 检测到人像，限制最大锐化值 (从 ${originalSharpness.toFixed(0)} 到 ${adjustedParams.sharpness})`);
+                info += `检测到人像，限制锐化；`;
+                hasAdjustments = true;
+            }
+        } else if (imageType === 'photo') {
+            const originalSharpness = adjustedParams.sharpness;
+            if (originalSharpness > 20) { // 普通照片限制最大锐化值为 20
+                adjustedParams.sharpness = 20;
+                analysis.adjustmentReasons.push(`[图像类型调整] 检测到普通照片，限制最大锐化值 (从 ${originalSharpness.toFixed(0)} 到 ${adjustedParams.sharpness})`);
+                info += `检测到普通照片，限制锐化；`;
+                hasAdjustments = true;
+            }
         }
 
         // 4. 图像分析总结
