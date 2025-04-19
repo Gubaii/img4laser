@@ -238,11 +238,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const detectedImageType = result.params?.detectedImageType || 'unknown';
                 const imageTypeText = detectedImageType === 'portrait' ? '人像照片' : 
                                     detectedImageType === 'cartoon' ? '卡通/线稿' : '普通照片';
+                
+                // 使用当前实际参数创建分析对象，确保显示最新的锚点灰度值
+                const currentAnchorGray = result.params.anchorGray; // 获取处理后的实际值
                 const analysis = {
-                    imageSummary: `重新应用抖动设置 (算法: ${algorithmId === 'none' ? '无抖动' : algorithmId}, 锚点灰度: ${baseParams.anchorGray}, 图像类型: ${imageTypeText})`,
+                    imageSummary: `重新应用抖动设置 (算法: ${algorithmId === 'none' ? '无抖动' : algorithmId}, 锚点灰度: ${currentAnchorGray}, 图像类型: ${imageTypeText})`,
                     adjustmentReasons: [
                         `[抖动调整] 算法更改为 ${algorithmId === 'none' ? '无抖动' : algorithmId}`,
-                        `[用户设置] 锚点灰度保持为 ${baseParams.anchorGray}`,
+                        `[用户设置] 锚点灰度保持为 ${currentAnchorGray}`,
                         // 更新反色说明，直接反映基础处理的反色状态
                         lastProcessingResult.wasInverted ? '[颜色处理] 深色材料已应用反色' : '[颜色处理] 浅色材料未应用反色' 
                     ],
@@ -261,15 +264,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 result.analysis = analysis;
                 
+                // 记录参数传递情况，便于调试
+                console.log('抖动应用后的参数:', result.params);
+                console.log('传递给 displayAnalysisReport 的参数:', result.params);
+                
                 lastProcessingResult = result;
                 baseProcessedImageData = new ImageData(
                     new Uint8ClampedArray(result.processedImage.data),
                     result.processedImage.width,
                     result.processedImage.height
                 );
-                processedImageData = baseProcessedImageData; 
-                // 更新反色状态
-                isCurrentlyInverted = lastProcessingResult.wasInverted; 
+                processedImageData = baseProcessedImageData;
+                // 设置反色状态
+                isCurrentlyInverted = result.wasInverted;
                 if (isCurrentlyInverted) {
                     invertButton.classList.add('active');
                 } else {
@@ -635,7 +642,7 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadButton.disabled = false;
         
         if (result.analysis) {
-            displayAnalysisReport(result.analysis, result.imageStats, result.initialParams);
+            displayAnalysisReport(result.analysis, result.imageStats, result.params);
         }
         
         if (anchorGraySlider) {
@@ -646,149 +653,173 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // 显示分析报告
     function displayAnalysisReport(analysis, imageStats, params) {
-        const existingPanel = document.getElementById('analysisPanel');
-        if (existingPanel) {
-            existingPanel.remove();
-        }
-        
-        const analysisPanel = document.createElement('div');
-        analysisPanel.id = 'analysisPanel';
-        analysisPanel.className = 'analysis-panel';
-        
-        const panelTitle = document.createElement('h3');
-        panelTitle.textContent = '图像分析报告';
-        analysisPanel.appendChild(panelTitle);
-        
-        if (analysis.imageSummary) {
-            const summarySection = document.createElement('div');
-            summarySection.className = 'analysis-section';
-            
-            const summaryTitle = document.createElement('h4');
-            summaryTitle.textContent = '图像特性';
-            summarySection.appendChild(summaryTitle);
-            
-            const summaryText = document.createElement('p');
-            summaryText.textContent = analysis.imageSummary;
-            summaryText.className = 'summary-text';
-            summarySection.appendChild(summaryText);
-            
-            analysisPanel.appendChild(summarySection);
-        }
-        
-        if (analysis.adjustmentReasons && analysis.adjustmentReasons.length > 0) {
-            const reasonsSection = document.createElement('div');
-            reasonsSection.className = 'analysis-section';
-            
-            const reasonsTitle = document.createElement('h4');
-            reasonsTitle.textContent = '调整说明';
-            reasonsSection.appendChild(reasonsTitle);
-            
-            const reasonsList = document.createElement('ul');
-            reasonsList.className = 'adjustments-list';
-            
-            analysis.adjustmentReasons.forEach(reason => {
-                const item = document.createElement('li');
-                item.textContent = reason;
-                reasonsList.appendChild(item);
-            });
-            
-            reasonsSection.appendChild(reasonsList);
-            analysisPanel.appendChild(reasonsSection);
-        }
-        
-        if (analysis.technicalDetails) {
-            const techSection = document.createElement('div');
-            techSection.className = 'analysis-section tech-details';
-            
-            const techTitle = document.createElement('h4');
-            techTitle.textContent = '技术详情';
-            techTitle.className = 'collapsible active';
-            techSection.appendChild(techTitle);
-            
-            const techContent = document.createElement('div');
-            techContent.className = 'tech-content';
-            techContent.style.display = 'block';
-            
-            const statsList = document.createElement('ul');
-            
-            const meanItem = document.createElement('li');
-            meanItem.textContent = `平均亮度: ${analysis.technicalDetails.meanBrightness}`;
-            statsList.appendChild(meanItem);
-            
-            const stdDevItem = document.createElement('li');
-            stdDevItem.textContent = `标准差: ${analysis.technicalDetails.standardDeviation}`;
-            statsList.appendChild(stdDevItem);
-            
-            if (analysis.technicalDetails.peaks) {
-                const peaksItem = document.createElement('li');
-                peaksItem.textContent = `直方图峰值: ${analysis.technicalDetails.peaks}`;
-                statsList.appendChild(peaksItem);
+        try {
+            const existingPanel = document.getElementById('analysisPanel');
+            if (existingPanel) {
+                existingPanel.remove();
             }
             
-            if (analysis.technicalDetails.valleys) {
-                const valleysItem = document.createElement('li');
-                valleysItem.textContent = `直方图谷值: ${analysis.technicalDetails.valleys}`;
-                statsList.appendChild(valleysItem);
+            // 防御性检查，确保 analysis 是有效对象
+            if (!analysis || typeof analysis !== 'object') {
+                console.warn('分析报告对象无效，跳过显示');
+                return;
             }
             
-            techContent.appendChild(statsList);
+            const analysisPanel = document.createElement('div');
+            analysisPanel.id = 'analysisPanel';
+            analysisPanel.className = 'analysis-panel';
             
-            const paramsTitle = document.createElement('h5');
-            paramsTitle.textContent = '应用参数';
-            techContent.appendChild(paramsTitle);
+            const panelTitle = document.createElement('h3');
+            panelTitle.textContent = '图像分析报告';
+            analysisPanel.appendChild(panelTitle);
             
-            const paramsList = document.createElement('ul');
-            paramsList.className = 'params-list';
+            if (analysis.imageSummary) {
+                const summarySection = document.createElement('div');
+                summarySection.className = 'analysis-section';
+                
+                const summaryTitle = document.createElement('h4');
+                summaryTitle.textContent = '图像特性';
+                summarySection.appendChild(summaryTitle);
+                
+                const summaryText = document.createElement('p');
+                summaryText.textContent = analysis.imageSummary;
+                summaryText.className = 'summary-text';
+                summarySection.appendChild(summaryText);
+                
+                analysisPanel.appendChild(summarySection);
+            }
             
-            Object.entries(params).forEach(([key, value]) => {
-                if (key === 'levelOutLow' || key === 'levelOutHigh') {
-                    return; 
+            if (analysis.adjustmentReasons && analysis.adjustmentReasons.length > 0) {
+                const reasonsSection = document.createElement('div');
+                reasonsSection.className = 'analysis-section';
+                
+                const reasonsTitle = document.createElement('h4');
+                reasonsTitle.textContent = '调整说明';
+                reasonsSection.appendChild(reasonsTitle);
+                
+                const reasonsList = document.createElement('ul');
+                reasonsList.className = 'adjustments-list';
+                
+                analysis.adjustmentReasons.forEach(reason => {
+                    const item = document.createElement('li');
+                    item.textContent = reason;
+                    reasonsList.appendChild(item);
+                });
+                
+                reasonsSection.appendChild(reasonsList);
+                analysisPanel.appendChild(reasonsSection);
+            }
+            
+            if (analysis.technicalDetails) {
+                const techSection = document.createElement('div');
+                techSection.className = 'analysis-section tech-details';
+                
+                const techTitle = document.createElement('h4');
+                techTitle.textContent = '技术详情';
+                techTitle.className = 'collapsible active';
+                techSection.appendChild(techTitle);
+                
+                const techContent = document.createElement('div');
+                techContent.className = 'tech-content';
+                techContent.style.display = 'block';
+                
+                const statsList = document.createElement('ul');
+                
+                const meanItem = document.createElement('li');
+                meanItem.textContent = `平均亮度: ${analysis.technicalDetails.meanBrightness}`;
+                statsList.appendChild(meanItem);
+                
+                const stdDevItem = document.createElement('li');
+                stdDevItem.textContent = `标准差: ${analysis.technicalDetails.standardDeviation}`;
+                statsList.appendChild(stdDevItem);
+                
+                if (analysis.technicalDetails.peaks) {
+                    const peaksItem = document.createElement('li');
+                    peaksItem.textContent = `直方图峰值: ${analysis.technicalDetails.peaks}`;
+                    statsList.appendChild(peaksItem);
                 }
                 
-                if (!params.ditherEnabled && (key === 'ditherThreshold' || key === 'ditherType')) {
-                    return;
+                if (analysis.technicalDetails.valleys) {
+                    const valleysItem = document.createElement('li');
+                    valleysItem.textContent = `直方图谷值: ${analysis.technicalDetails.valleys}`;
+                    statsList.appendChild(valleysItem);
                 }
+                
+                techContent.appendChild(statsList);
+                
+                // 只有当 params 是有效对象时才显示参数列表
+                if (params && typeof params === 'object') {
+                    const paramsTitle = document.createElement('h5');
+                    paramsTitle.textContent = '应用参数';
+                    techContent.appendChild(paramsTitle);
+                    
+                    const paramsList = document.createElement('ul');
+                    paramsList.className = 'params-list';
+                    
+                    try {
+                        Object.entries(params).forEach(([key, value]) => {
+                            if (key === 'levelOutLow' || key === 'levelOutHigh') {
+                                return; 
+                            }
+                            
+                            if (!params.ditherEnabled && (key === 'ditherThreshold' || key === 'ditherType')) {
+                                return;
+                            }
 
-                const item = document.createElement('li');
-                let displayValue = value;
-                
-                if (key === 'contrast') {
-                    displayValue = (value * 100).toFixed(0) + '%';
-                } else if (key === 'ditherEnabled') {
-                    displayValue = value ? '是' : '否';
-                } else if (key === 'ditherType' && value) {
-                    const typeNames = { 'floydSteinberg': 'Floyd-Steinberg', 'atkinson': 'Atkinson', 'jarvis': 'Jarvis', 'ordered': 'Ordered', 'bayer': 'Bayer' };
-                    displayValue = typeNames[value] || value;
-                } else if (typeof value === 'number' && !Number.isInteger(value)) {
-                    displayValue = value.toFixed(2);
-                }
-                
-                item.textContent = `${getParamDisplayName(key)}: ${displayValue}`;
-                paramsList.appendChild(item);
-            });
-            
-            techContent.appendChild(paramsList);
-            techSection.appendChild(techContent);
-            
-            techTitle.addEventListener('click', () => {
-                if (techContent.style.display === 'none') {
-                    techContent.style.display = 'block';
-                    techTitle.classList.add('active');
+                            const item = document.createElement('li');
+                            let displayValue = value;
+                            
+                            if (key === 'contrast') {
+                                displayValue = (value * 100).toFixed(0) + '%';
+                            } else if (key === 'ditherEnabled') {
+                                displayValue = value ? '是' : '否';
+                            } else if (key === 'ditherType' && value) {
+                                const typeNames = { 'floydSteinberg': 'Floyd-Steinberg', 'atkinson': 'Atkinson', 'jarvis': 'Jarvis', 'ordered': 'Ordered', 'bayer': 'Bayer' };
+                                displayValue = typeNames[value] || value;
+                            } else if (typeof value === 'number' && !Number.isInteger(value)) {
+                                displayValue = value.toFixed(2);
+                            }
+                            
+                            item.textContent = `${getParamDisplayName(key)}: ${displayValue}`;
+                            paramsList.appendChild(item);
+                        });
+                    } catch (err) {
+                        console.error("处理参数列表时出错:", err);
+                        const errorItem = document.createElement('li');
+                        errorItem.textContent = "[错误] 参数加载失败";
+                        errorItem.style.color = "red";
+                        paramsList.appendChild(errorItem);
+                    }
+                    
+                    techContent.appendChild(paramsList);
                 } else {
-                    techContent.style.display = 'none';
-                    techTitle.classList.remove('active');
+                    console.warn('未提供有效参数对象，跳过参数显示');
                 }
-            });
+                
+                techSection.appendChild(techContent);
+                
+                techTitle.addEventListener('click', () => {
+                    if (techContent.style.display === 'none') {
+                        techContent.style.display = 'block';
+                        techTitle.classList.add('active');
+                    } else {
+                        techContent.style.display = 'none';
+                        techTitle.classList.remove('active');
+                    }
+                });
+                
+                analysisPanel.appendChild(techSection);
+            }
             
-            analysisPanel.appendChild(techSection);
-        }
-        
-        const reportContainer = document.getElementById('analysisReportContainer');
-        if (reportContainer) {
-            reportContainer.innerHTML = '';
-            reportContainer.appendChild(analysisPanel);
-        } else {
-            console.error("Analysis report container not found!");
+            const reportContainer = document.getElementById('analysisReportContainer');
+            if (reportContainer) {
+                reportContainer.innerHTML = '';
+                reportContainer.appendChild(analysisPanel);
+            } else {
+                console.error("Analysis report container not found!");
+            }
+        } catch (error) {
+            console.error("显示分析报告时发生错误:", error);
         }
     }
     
